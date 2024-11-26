@@ -95,10 +95,19 @@ func (b *Board) IsValid(row, col, num int) bool {
 	return true
 }
 
-// Solve solves the Sudoku puzzle using backtracking
+// Solve solves the Sudoku puzzle using backtracking without validation
 func (b *Board) Solve() bool {
-	// First check if the initial board is valid
-	if b == nil || !b.isValidBoard() {
+	return b.solve(false)
+}
+
+// SolveWithValidation solves the Sudoku puzzle using backtracking, including initial validation
+func (b *Board) SolveWithValidation() bool {
+	return b.solve(true)
+}
+
+// solve is the internal implementation
+func (b *Board) solve(validate bool) bool {
+	if b == nil || (validate && !b.isValidBoard()) {
 		return false
 	}
 
@@ -111,7 +120,7 @@ func (b *Board) Solve() bool {
 		if b.IsValid(row, col, num) {
 			b.grid[row][col] = num
 
-			if b.Solve() {
+			if b.solve(validate) {
 				return true
 			}
 
