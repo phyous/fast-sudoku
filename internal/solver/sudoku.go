@@ -1,4 +1,4 @@
-package sudoku
+package solver
 
 // Board represents a 9x9 Sudoku board
 type Board struct {
@@ -7,7 +7,62 @@ type Board struct {
 
 // NewBoard creates a new Sudoku board with the given values
 func NewBoard(values [9][9]int) *Board {
-	return &Board{grid: values}
+	board := &Board{grid: values}
+	if !board.isValidBoard() {
+		return nil
+	}
+	return board
+}
+
+// isValidBoard checks if the current board state is valid
+func (b *Board) isValidBoard() bool {
+	// Check each row and column
+	for i := 0; i < 9; i++ {
+		rowNums := make(map[int]bool)
+		colNums := make(map[int]bool)
+
+		for j := 0; j < 9; j++ {
+			// Check row
+			if b.grid[i][j] != 0 {
+				if rowNums[b.grid[i][j]] {
+					return false
+				}
+				if b.grid[i][j] < 1 || b.grid[i][j] > 9 {
+					return false
+				}
+				rowNums[b.grid[i][j]] = true
+			}
+
+			// Check column
+			if b.grid[j][i] != 0 {
+				if colNums[b.grid[j][i]] {
+					return false
+				}
+				colNums[b.grid[j][i]] = true
+			}
+		}
+	}
+
+	// Check 3x3 boxes
+	for box := 0; box < 9; box++ {
+		boxNums := make(map[int]bool)
+		startRow := (box / 3) * 3
+		startCol := (box % 3) * 3
+
+		for i := 0; i < 3; i++ {
+			for j := 0; j < 3; j++ {
+				num := b.grid[startRow+i][startCol+j]
+				if num != 0 {
+					if boxNums[num] {
+						return false
+					}
+					boxNums[num] = true
+				}
+			}
+		}
+	}
+
+	return true
 }
 
 // IsValid checks if a number can be placed at the given position
@@ -42,6 +97,11 @@ func (b *Board) IsValid(row, col, num int) bool {
 
 // Solve solves the Sudoku puzzle using backtracking
 func (b *Board) Solve() bool {
+	// First check if the initial board is valid
+	if b == nil || !b.isValidBoard() {
+		return false
+	}
+
 	row, col := b.findEmpty()
 	if row == -1 && col == -1 {
 		return true // puzzle is solved
@@ -64,6 +124,11 @@ func (b *Board) Solve() bool {
 
 // findEmpty finds an empty cell (represented by 0)
 func (b *Board) findEmpty() (int, int) {
+	// Check for nil board
+	if b == nil {
+		return -1, -1
+	}
+
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
 			if b.grid[i][j] == 0 {
@@ -71,7 +136,7 @@ func (b *Board) findEmpty() (int, int) {
 			}
 		}
 	}
-	return -1, -1
+	return -1, -1  // No empty cells found
 }
 
 // GetGrid returns the current state of the grid

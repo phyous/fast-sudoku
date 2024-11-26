@@ -1,8 +1,9 @@
 package main
 
 import (
-	"fast-sudoku/sudoku"
 	"fmt"
+
+	"github.com/phyous/fast-sudoku/internal/solver"
 )
 
 func main() {
@@ -19,7 +20,7 @@ func main() {
 		{0, 0, 0, 0, 8, 0, 0, 7, 9},
 	}
 
-	board := sudoku.NewBoard(puzzle)
+	board := solver.NewBoard(puzzle)
 	fmt.Println("Original puzzle:")
 	fmt.Println(board)
 
