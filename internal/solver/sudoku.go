@@ -1,17 +1,21 @@
 package solver
 
+import (
+	"fmt"
+)
+
 // Board represents a 9x9 Sudoku board
 type Board struct {
 	grid [9][9]int
 }
 
 // NewBoard creates a new Sudoku board with the given values
-func NewBoard(values [9][9]int) *Board {
+func NewBoard(values [9][9]int) (*Board, error) {
 	board := &Board{grid: values}
 	if !board.isValidBoard() {
-		return nil
+		return nil, fmt.Errorf("invalid board: contains duplicate numbers or invalid values")
 	}
-	return board
+	return board, nil
 }
 
 // isValidBoard checks if the current board state is valid
@@ -65,36 +69,6 @@ func (b *Board) isValidBoard() bool {
 	return true
 }
 
-// IsValid checks if a number can be placed at the given position
-func (b *Board) IsValid(row, col, num int) bool {
-	// Check row
-	for x := 0; x < 9; x++ {
-		if b.grid[row][x] == num {
-			return false
-		}
-	}
-
-	// Check column
-	for x := 0; x < 9; x++ {
-		if b.grid[x][col] == num {
-			return false
-		}
-	}
-
-	// Check 3x3 box
-	startRow := row - row%3
-	startCol := col - col%3
-	for i := 0; i < 3; i++ {
-		for j := 0; j < 3; j++ {
-			if b.grid[i+startRow][j+startCol] == num {
-				return false
-			}
-		}
-	}
-
-	return true
-}
-
 // Solve solves the Sudoku puzzle using backtracking without validation
 func (b *Board) Solve() bool {
 	return b.solve(false)
@@ -107,50 +81,95 @@ func (b *Board) SolveWithValidation() bool {
 
 // solve is the internal implementation
 func (b *Board) solve(validate bool) bool {
-	if b == nil || (validate && !b.isValidBoard()) {
+	// Add nil check at the start
+	if b == nil {
 		return false
 	}
 
-	row, col := b.findEmpty()
-	if row == -1 && col == -1 {
+	// Validate only once at the start, not in recursive calls
+	if validate {
+		if b == nil || !b.isValidBoard() {
+			return false
+		}
+		validate = false // Reset flag to avoid repeated validation
+	}
+
+	// Find cell with fewest possible candidates first (most constrained)
+	row, col := b.findMostConstrained()
+	if row == -1 {
 		return true // puzzle is solved
 	}
 
-	for num := 1; num <= 9; num++ {
-		if b.IsValid(row, col, num) {
-			b.grid[row][col] = num
-
-			if b.solve(validate) {
-				return true
-			}
-
-			b.grid[row][col] = 0 // backtrack
+	// Get valid candidates for this cell (instead of trying all 1-9)
+	candidates := b.getCandidates(row, col)
+	for _, num := range candidates {
+		b.grid[row][col] = num
+		if b.solve(validate) {
+			return true
 		}
+		b.grid[row][col] = 0
 	}
 
 	return false
 }
 
-// findEmpty finds an empty cell (represented by 0)
-func (b *Board) findEmpty() (int, int) {
-	// Check for nil board
+// Helper method to find most constrained cell
+func (b *Board) findMostConstrained() (int, int) {
+	// Add nil check at the start
 	if b == nil {
 		return -1, -1
 	}
 
+	minCandidates := 10
+	minRow, minCol := -1, -1
+
 	for i := 0; i < 9; i++ {
 		for j := 0; j < 9; j++ {
 			if b.grid[i][j] == 0 {
-				return i, j
+				count := len(b.getCandidates(i, j))
+				if count < minCandidates {
+					minCandidates = count
+					minRow, minCol = i, j
+					if minCandidates == 1 { // Can't get better than 1 candidate
+						return i, j
+					}
+				}
 			}
 		}
 	}
-	return -1, -1  // No empty cells found
+	return minRow, minCol
 }
 
-// GetGrid returns the current state of the grid
-func (b *Board) GetGrid() [9][9]int {
-	return b.grid
+// Helper method to get valid candidates for a cell
+func (b *Board) getCandidates(row, col int) []int {
+	used := [10]bool{} // 0-based index, but we'll use 1-9
+
+	// Check row
+	for i := 0; i < 9; i++ {
+		used[b.grid[row][i]] = true
+	}
+
+	// Check column
+	for i := 0; i < 9; i++ {
+		used[b.grid[i][col]] = true
+	}
+
+	// Check 3x3 box
+	startRow, startCol := row-row%3, col-col%3
+	for i := 0; i < 3; i++ {
+		for j := 0; j < 3; j++ {
+			used[b.grid[startRow+i][startCol+j]] = true
+		}
+	}
+
+	// Collect valid candidates
+	candidates := make([]int, 0, 9)
+	for num := 1; num <= 9; num++ {
+		if !used[num] {
+			candidates = append(candidates, num)
+		}
+	}
+	return candidates
 }
 
 // String returns a string representation of the board
@@ -158,7 +177,7 @@ func (b *Board) String() string {
 	var result string
 	for i := 0; i < 9; i++ {
 		if i%3 == 0 && i != 0 {
-			result += "- - - - - - - - - - - -\n"
+			result += "- - - - - - - - - - -\n"
 		}
 		for j := 0; j < 9; j++ {
 			if j%3 == 0 && j != 0 {

@@ -20,7 +20,11 @@ func main() {
 		{0, 0, 0, 0, 8, 0, 0, 7, 9},
 	}
 
-	board := solver.NewBoard(puzzle)
+	board, err := solver.NewBoard(puzzle)
+	if err != nil {
+		fmt.Println("Error creating board:", err)
+		return
+	}
 	fmt.Println("Original puzzle:")
 	fmt.Println(board)
 
