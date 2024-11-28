@@ -2,7 +2,7 @@
 
 This project contains a fast Sudoku solver and a simulator for benchmarking the solver's performance
 
-![Sudoku Solver Screenshot](screenshot.png)
+![Sudoku Solver](img/screenshot.png)
 
 ## Build Instructions
 
