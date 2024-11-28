@@ -101,6 +101,28 @@ type benchmarkStats struct {
 	byDifficulty map[int][]time.Duration
 }
 
+func deepCopyPuzzles(puzzles []solver.Puzzle) []solver.Puzzle {
+	puzzlesCopy := make([]solver.Puzzle, len(puzzles))
+	for i, p := range puzzles {
+		// Get the grid from the original board
+		originalGrid := p.Board.Grid()
+
+		// Create a new Board with the same grid
+		boardCopy, err := solver.NewBoard(originalGrid, false)
+		if err != nil {
+			// Handle error appropriately
+			panic(fmt.Sprintf("Failed to copy board: %v", err))
+		}
+
+		puzzlesCopy[i] = solver.Puzzle{
+			Index:      p.Index,
+			Board:      boardCopy,
+			Difficulty: p.Difficulty,
+		}
+	}
+	return puzzlesCopy
+}
+
 func runBenchmark(cfg config, puzzles []solver.Puzzle) {
 	// Print the number of puzzles
 	fmt.Printf("\n# Running benchmark with %d puzzles across %d runs \n", len(puzzles), cfg.numRuns)
@@ -124,7 +146,8 @@ func runBenchmark(cfg config, puzzles []solver.Puzzle) {
 			progressbar.OptionThrottle(65*time.Millisecond))
 
 		start := time.Now()
-		results := s.SolvePuzzles(context.Background(), puzzles)
+		puzzlesCopy := deepCopyPuzzles(puzzles)
+		results := s.SolvePuzzles(context.Background(), puzzlesCopy)
 
 		count := 0
 		batchSize := 1000
