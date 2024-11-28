@@ -2,7 +2,6 @@ package solver
 
 import (
 	"context"
-	"math/rand"
 	"sync"
 	"time"
 )
@@ -74,24 +73,4 @@ func (s *Solver) SolvePuzzles(ctx context.Context, puzzles []Puzzle) chan Result
 	}()
 
 	return results
-}
-
-// GenerateValidPuzzle generates a valid puzzle with given difficulty
-func GenerateValidPuzzle(difficulty int) *Board {
-	// Start with a solved board
-	board, _ := NewBoard([9][9]int{})
-	board.Solve()
-
-	// Remove numbers to achieve desired difficulty
-	cellsToRemove := difficulty
-	for cellsToRemove > 0 {
-		row := rand.Intn(9)
-		col := rand.Intn(9)
-		if board.grid[row][col] != 0 {
-			board.grid[row][col] = 0
-			cellsToRemove--
-		}
-	}
-
-	return board
 }

@@ -2,6 +2,7 @@ package solver
 
 import (
 	"fmt"
+	"math/rand"
 )
 
 // Board represents a 9x9 Sudoku board
@@ -10,9 +11,9 @@ type Board struct {
 }
 
 // NewBoard creates a new Sudoku board with the given values
-func NewBoard(values [9][9]int) (*Board, error) {
+func NewBoard(values [9][9]int, validate bool) (*Board, error) {
 	board := &Board{grid: values}
-	if !board.isValidBoard() {
+	if validate && !board.isValidBoard() {
 		return nil, fmt.Errorf("invalid board: contains duplicate numbers or invalid values")
 	}
 	return board, nil
@@ -193,4 +194,73 @@ func (b *Board) String() string {
 // Grid returns a copy of the board's grid
 func (b *Board) Grid() [9][9]int {
 	return b.grid
+}
+
+// GenerateValidPuzzle creates a new puzzle with the specified number of empty cells
+func GenerateValidPuzzle(difficulty int) (*Board, error) {
+	if difficulty < 0 || difficulty > 81 {
+		return nil, fmt.Errorf("difficulty must be between 0 and 81")
+	}
+
+	// Start with a solved puzzle
+	solved := generateSolvedPuzzle()
+	puzzle := solved
+
+	// Create and shuffle positions slice
+	positions := make([][2]int, 81)
+	for i := 0; i < 9; i++ {
+		for j := 0; j < 9; j++ {
+			positions[i*9+j] = [2]int{i, j}
+		}
+	}
+	rand.Shuffle(len(positions), func(i, j int) {
+		positions[i], positions[j] = positions[j], positions[i]
+	})
+
+	// Remove numbers while maintaining uniqueness
+	removed := 0
+	for _, pos := range positions {
+		row, col := pos[0], pos[1]
+		backup := puzzle[row][col]
+		puzzle[row][col] = 0
+
+		// Create a board for testing uniqueness
+		board, err := NewBoard(puzzle, false)
+		if err != nil {
+			puzzle[row][col] = backup
+			continue
+		}
+
+		// Quick check: if the cell has only one candidate, it's definitely solvable
+		candidates := board.getCandidates(row, col)
+		if len(candidates) == 1 && candidates[0] == backup {
+			removed++
+			if removed >= difficulty {
+				break
+			}
+			continue
+		}
+
+		// Try solving - if it succeeds, the puzzle is still valid
+		boardCopy := *board
+		if !boardCopy.Solve() {
+			puzzle[row][col] = backup
+			continue
+		}
+
+		removed++
+		if removed >= difficulty {
+			break
+		}
+	}
+
+	// Return Board instead of raw grid
+	return NewBoard(puzzle, false)
+}
+
+// generateSolvedPuzzle creates a completely filled valid Sudoku board
+func generateSolvedPuzzle() [9][9]int {
+	board := &Board{}
+	board.Solve()
+	return board.grid
 }

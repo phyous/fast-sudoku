@@ -40,7 +40,7 @@ func parseFlags() config {
 	flag.IntVar(&cfg.numPuzzles, "puzzles", 10000, "Number of puzzles to generate")
 	flag.IntVar(&cfg.minDifficulty, "min-difficulty", 30, "Minimum number of empty cells")
 	flag.IntVar(&cfg.maxDifficulty, "max-difficulty", 60, "Maximum number of empty cells")
-	flag.IntVar(&cfg.maxConcurrency, "concurrency", 4, "Maximum number of concurrent solvers")
+	flag.IntVar(&cfg.maxConcurrency, "concurrency", 40, "Maximum number of concurrent solvers")
 	flag.IntVar(&cfg.numRuns, "runs", 3, "Number of benchmark runs")
 
 	flag.Parse()
@@ -65,20 +65,18 @@ func generatePuzzles(cfg config) []solver.Puzzle {
 
 	for i := range puzzles {
 		difficulty := rand.Intn(cfg.maxDifficulty-cfg.minDifficulty+1) + cfg.minDifficulty
-		board := generateValidPuzzle(difficulty)
+		board, err := solver.GenerateValidPuzzle(difficulty)
 
-		newBoard, err := solver.NewBoard(board)
 		if err != nil {
-			// Handle error - for now just panic since this shouldn't happen
-			// with our generation logic
-			panic(fmt.Sprintf("Generated invalid board: %v", err))
+			panic(fmt.Sprintf("Failed to generate puzzle: %v", err))
 		}
 
 		puzzles[i] = solver.Puzzle{
 			Index:      i,
-			Board:      newBoard,
+			Board:      board,
 			Difficulty: difficulty,
 		}
+
 		bar.Add(1)
 	}
 
@@ -92,6 +90,9 @@ type benchmarkStats struct {
 }
 
 func runBenchmark(cfg config, puzzles []solver.Puzzle) {
+	// Print the number of puzzles
+	fmt.Printf("\n# Running benchmark with %d puzzles across %d runs \n", len(puzzles), cfg.numRuns)
+
 	s := solver.NewSolver(cfg.maxConcurrency)
 
 	allStats := make([]benchmarkStats, cfg.numRuns)
@@ -188,74 +189,6 @@ func convertToFloat64(durations []time.Duration) []float64 {
 		result[i] = float64(d.Microseconds())
 	}
 	return result
-}
-
-func generateValidPuzzle(difficulty int) [9][9]int {
-	// Start with a solved puzzle
-	solved := generateSolvedPuzzle()
-	puzzle := solved
-
-	// Create a list of all positions
-	positions := make([][2]int, 0, 81)
-	for i := 0; i < 9; i++ {
-		for j := 0; j < 9; j++ {
-			positions = append(positions, [2]int{i, j})
-		}
-	}
-
-	// Shuffle positions
-	rand.Shuffle(len(positions), func(i, j int) {
-		positions[i], positions[j] = positions[j], positions[i]
-	})
-
-	// Remove numbers while maintaining uniqueness
-	removed := 0
-	for _, pos := range positions {
-		row, col := pos[0], pos[1]
-		backup := puzzle[row][col]
-		puzzle[row][col] = 0
-
-		// Create a board for testing uniqueness
-		board, err := solver.NewBoard(puzzle)
-		if err != nil {
-			// If invalid, restore the number and continue
-			puzzle[row][col] = backup
-			continue
-		}
-
-		// Count solutions using the solver package
-		solutions := countSolutions(board)
-		if solutions != 1 {
-			// If not unique solution, restore the number
-			puzzle[row][col] = backup
-			continue
-		}
-
-		removed++
-		if removed >= difficulty {
-			break
-		}
-	}
-
-	return puzzle
-}
-
-// Add this helper function to count solutions
-func countSolutions(board *solver.Board) int {
-	// Make a copy of the board
-	boardCopy := *board
-
-	// If it can be solved, we found at least one solution
-	if boardCopy.Solve() {
-		return 1
-	}
-	return 0
-}
-
-func generateSolvedPuzzle() [9][9]int {
-	board := &solver.Board{} // Create empty board
-	board.Solve()            // Let the solver fill it
-	return board.Grid()      // You'll need to add a Grid() method to Board
 }
 
 func (s *benchmarkStats) Percentile(data []float64, p float64) (float64, error) {
