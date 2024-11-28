@@ -4,7 +4,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"math"
 	"math/rand"
 	"sort"
 	"time"
@@ -12,6 +11,7 @@ import (
 	"github.com/fatih/color"
 	"github.com/guptarohit/asciigraph"
 	"github.com/schollz/progressbar/v3"
+	"gonum.org/v1/gonum/stat"
 
 	"github.com/phyous/fast-sudoku/internal/solver"
 )
@@ -55,6 +55,7 @@ func generatePuzzles(cfg config) []solver.Puzzle {
 		progressbar.OptionEnableColorCodes(true),
 		progressbar.OptionShowCount(),
 		progressbar.OptionShowIts(),
+		progressbar.OptionThrottle(65*time.Millisecond),
 		progressbar.OptionSetTheme(progressbar.Theme{
 			Saucer:        "[green]=[reset]",
 			SaucerHead:    "[green]>[reset]",
@@ -63,8 +64,12 @@ func generatePuzzles(cfg config) []solver.Puzzle {
 			BarEnd:        "]",
 		}))
 
+	count := 0
+	batchSize := 500
+
 	for i := range puzzles {
 		difficulty := rand.Intn(cfg.maxDifficulty-cfg.minDifficulty+1) + cfg.minDifficulty
+
 		board, err := solver.GenerateValidPuzzle(difficulty)
 
 		if err != nil {
@@ -77,7 +82,14 @@ func generatePuzzles(cfg config) []solver.Puzzle {
 			Difficulty: difficulty,
 		}
 
-		bar.Add(1)
+		count++
+		if count%batchSize == 0 {
+			bar.Add(batchSize)
+		}
+	}
+
+	if remaining := count % batchSize; remaining > 0 {
+		bar.Add(remaining)
 	}
 
 	return puzzles
@@ -108,10 +120,14 @@ func runBenchmark(cfg config, puzzles []solver.Puzzle) {
 			progressbar.OptionSetDescription("Solving puzzles..."),
 			progressbar.OptionEnableColorCodes(true),
 			progressbar.OptionShowCount(),
-			progressbar.OptionShowIts())
+			progressbar.OptionShowIts(),
+			progressbar.OptionThrottle(65*time.Millisecond))
 
 		start := time.Now()
 		results := s.SolvePuzzles(context.Background(), puzzles)
+
+		count := 0
+		batchSize := 1000
 
 		for result := range results {
 			stats.solveTimes = append(stats.solveTimes, result.SolveTime)
@@ -119,7 +135,15 @@ func runBenchmark(cfg config, puzzles []solver.Puzzle) {
 				stats.byDifficulty[result.Difficulty],
 				result.SolveTime,
 			)
-			bar.Add(1)
+
+			count++
+			if count%batchSize == 0 {
+				bar.Add(batchSize)
+			}
+		}
+
+		if remaining := count % batchSize; remaining > 0 {
+			bar.Add(remaining)
 		}
 
 		stats.totalTime = time.Since(start)
@@ -143,17 +167,17 @@ func printReport(cfg config, allStats []benchmarkStats) {
 		fmt.Printf("Puzzles per second: %.2f\n",
 			float64(cfg.numPuzzles)/stats.totalTime.Seconds())
 
-		// Calculate percentiles
+		// Calculate percentiles and standard deviation using gonum
 		sorted := make([]float64, len(stats.solveTimes))
 		for i, t := range stats.solveTimes {
 			sorted[i] = float64(t.Microseconds())
 		}
 		sort.Float64s(sorted)
 
-		p50, _ := stats.Percentile(sorted, 50)
-		p90, _ := stats.Percentile(sorted, 90)
-		p99, _ := stats.Percentile(sorted, 99)
-		stdev, _ := stats.StandardDeviation(sorted)
+		_, stddev := stat.MeanStdDev(sorted, nil)
+		p50 := stat.Quantile(0.50, stat.Empirical, sorted, nil)
+		p90 := stat.Quantile(0.90, stat.Empirical, sorted, nil)
+		p99 := stat.Quantile(0.99, stat.Empirical, sorted, nil)
 
 		fmt.Printf("\nSolve time statistics (microseconds):\n")
 		fmt.Printf("min: %.2f\n", sorted[0])
@@ -161,15 +185,16 @@ func printReport(cfg config, allStats []benchmarkStats) {
 		fmt.Printf("p90: %.2f\n", p90)
 		fmt.Printf("p99: %.2f\n", p99)
 		fmt.Printf("max: %.2f\n", sorted[len(sorted)-1])
-		fmt.Printf("stdev: %.2f\n", stdev)
+		fmt.Printf("stdev: %.2f\n", stddev)
 
 		// Generate difficulty histogram
 		difficulties := make([]float64, 0)
 		times := make([]float64, 0)
 
 		for diff, timings := range stats.byDifficulty {
-			p50, _ := stats.Percentile(convertToFloat64(timings), 50)
-			//p99, _ := stats.Percentile(convertToFloat64(timings), 99)
+			diffSorted := convertToFloat64(timings)
+			sort.Float64s(diffSorted)
+			p50 := stat.Quantile(0.50, stat.Empirical, diffSorted, nil)
 
 			difficulties = append(difficulties, float64(diff))
 			times = append(times, p50)
@@ -189,43 +214,4 @@ func convertToFloat64(durations []time.Duration) []float64 {
 		result[i] = float64(d.Microseconds())
 	}
 	return result
-}
-
-func (s *benchmarkStats) Percentile(data []float64, p float64) (float64, error) {
-	if len(data) == 0 {
-		return 0, fmt.Errorf("empty data set")
-	}
-
-	k := float64(len(data)-1) * p / 100
-	i := int(k)
-
-	if i+1 >= len(data) {
-		return data[len(data)-1], nil
-	}
-
-	f := k - float64(i)
-	return data[i] + f*(data[i+1]-data[i]), nil
-}
-
-func (s *benchmarkStats) StandardDeviation(data []float64) (float64, error) {
-	if len(data) == 0 {
-		return 0, fmt.Errorf("empty data set")
-	}
-
-	// Calculate mean
-	var sum float64
-	for _, v := range data {
-		sum += v
-	}
-	mean := sum / float64(len(data))
-
-	// Calculate variance
-	var variance float64
-	for _, v := range data {
-		diff := v - mean
-		variance += diff * diff
-	}
-	variance /= float64(len(data))
-
-	return math.Sqrt(variance), nil
 }
