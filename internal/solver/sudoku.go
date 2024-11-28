@@ -189,3 +189,8 @@ func (b *Board) String() string {
 	}
 	return result
 }
+
+// Grid returns a copy of the board's grid
+func (b *Board) Grid() [9][9]int {
+	return b.grid
+}

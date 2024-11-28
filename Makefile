@@ -1,10 +1,10 @@
 .PHONY: all build test clean
 
 # Build all applications
-all: build-sim
+all: build test run
 
 # Build API server
-build-sim:
+build:
 	CGO_ENABLED=0 go build -o bin/simulator ./cmd/simulator
 
 # Run tests
@@ -14,3 +14,6 @@ test:
 # Clean build artifacts
 clean:
 	rm -rf bin/
+
+run: build
+	./bin/simulator
